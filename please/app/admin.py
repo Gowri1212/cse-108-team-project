@@ -1,21 +1,19 @@
-from flask import redirect, url_for, request
+from flask import redirect, url_for, request, flash
 from flask_admin import Admin, AdminIndexView
 from flask_admin.contrib.sqla import ModelView
 from flask_admin.menu import MenuLink
 from flask_login import current_user
 from wtforms.fields import PasswordField
-
-# FIX: DIRECTLY IMPORT ALL MODELS. The application factory pattern handles the timing.
 from .models import db, User, Role, Course, Enrollment 
 
-# --- Admin Authentication Setup ---
+# Admin Authentication Setup
 
 class CustomAdminIndexView(AdminIndexView):
     """
-    Custom index view to restrict access to the /admin page.
+    Custom view to restrict access to the /admin page.
     """
     def is_accessible(self):
-        # Check for Admin role (role_id 3)
+        # check for Admin role (role_id 3)
         return current_user.is_authenticated and current_user.role_id == 3
 
     def inaccessible_callback(self, name, **kwargs):
@@ -23,7 +21,7 @@ class CustomAdminIndexView(AdminIndexView):
             return redirect(url_for('routes.login', next=request.url))
         return "Access denied: You must be an Admin.", 403
 
-# --- Custom Model View Base Class ---
+# Custom Model View Base Setup
 
 class CustomModelView(ModelView):
     """
@@ -37,8 +35,7 @@ class CustomModelView(ModelView):
             return redirect(url_for('routes.login', next=request.url))
         return "Access denied: You must be an Admin.", 403
 
-# --- Specialized Views ---
-
+# Specialized Views
 class CustomUserView(CustomModelView):
     column_list = ('id', 'username', 'role')
     form_columns = ('username', 'password', 'role')
@@ -62,14 +59,32 @@ class CourseView(CustomModelView):
         'teacher': lambda v, c, m, p: m.teacher.username if m.teacher else 'N/A'
     }
     
-    # FIX 1: Restrict the 'teacher' dropdown AND set the label to 'username'
+    # Restrict the 'teacher' dropdown AND set the label to 'username'
     form_args = {
         'teacher': {
             'query_factory': lambda: User.query.filter(User.role_id == 2),
-            'get_label': lambda u: u.username # <-- ADDED: Displays only the username
+            'get_label': lambda u: u.username 
         }
     }
     form_excluded_columns = ('enrollments',)
+    
+    def on_model_change(self, form, model, is_created):
+        # Check for Duplicate Name
+        if is_created or model.name != db.session.get(Course, model.id).name:
+            # Look for another course with the same name, excluding the one we are editing
+            existing_course = Course.query.filter(
+                Course.name == model.name,
+                Course.id != model.id if model.id else 0
+            ).first()
+
+            if existing_course:
+                # error message
+                flash(f"Creation/Update failed: A course named '{model.name}' already exists.", 'error')
+                return False
+
+        # If it's a success or if the name didn't change, proceed with the save.
+        return True
+    
     
 
 # Management > Enrollment Records View
@@ -84,34 +99,37 @@ class EnrollmentView(CustomModelView):
         'course': lambda v, c, m, p: m.course.name
     }
 
-    # FIX 2: Restrict 'student' dropdown AND set the label to 'username'
+    # Restrict 'student' dropdown AND set the label to 'username'
     form_args = {
         'student': {
             'query_factory': lambda: User.query.filter(User.role_id == 1),
-            'get_label': lambda u: u.username # <-- ADDED: Displays only the username
+            'get_label': lambda u: u.username 
         },
         'course': {
-            'get_label': lambda c: c.name # This already uses the course name
+            'get_label': lambda c: c.name 
         }
     }
     
-    # FIX: Custom logic to prevent duplicate enrollments or enrollments over capacity
+    # logic to prevent duplicate enrollments or enrollments over capacity
     def create_model(self, form):
         course = form.course.data
         student = form.student.data
         
-        # Check for capacity
-        if course.enrolled_students >= course.capacity:
-            raise ValueError(f"Enrollment failed: {course.name} is full (Capacity {course.capacity}).")
-
-        # Check for duplicate
+        # Check for Duplicate Enrollment
         if Enrollment.query.filter_by(user_id=student.id, course_id=course.id).first():
-            raise ValueError(f"Enrollment failed: {student.username} is already enrolled in {course.name}.")
+            flash(f"Enrollment failed: Student {student.username} is ALREADY enrolled in {course.name}.", 'error')
+            return False
+        
+        # Check for Full Capacity
+        if course.enrolled_students >= course.capacity:
+            flash(f"Enrollment failed: Class {course.name} is FULL (Capacity {course.capacity}).", 'error')
+            return False
 
+        # If all checks pass, proceed with creation
         return super(EnrollmentView, self).create_model(form)
 
 def setup_admin(app):
-    """Initializes and configures Flask-Admin with custom views."""
+    """Configure Flask-Admin with custom views."""
     admin = Admin(
         app, 
         index_view=CustomAdminIndexView(name='Admin Dashboard', url='/admin'),
@@ -123,8 +141,5 @@ def setup_admin(app):
     admin.add_view(CourseView(Course, db.session, name='Classes & Teachers', category='Management'))
     admin.add_view(EnrollmentView(Enrollment, db.session, name='Enrollment Records', category='Management'))
     
-    # FIX: Remove the "Role Definitions" tab by commenting out this line:
-    # admin.add_view(CustomModelView(Role, db.session, name='Role Definitions (Read-Only)', category='Advanced'))
-    
-    # FIX: Add a link to log out and go to the main page
+    # Link to log out and go to the main page
     admin.add_link(MenuLink(name='Logout & Main Page', url='/logout'))
