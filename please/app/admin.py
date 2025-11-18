@@ -1,13 +1,12 @@
 from flask import redirect, url_for, request
-from flask_admin import Admin, AdminIndexView, BaseView, expose
+from flask_admin import Admin, AdminIndexView
 from flask_admin.contrib.sqla import ModelView
 from flask_admin.menu import MenuLink
 from flask_login import current_user
 from wtforms.fields import PasswordField
-from .models import db, Role, User, Course, Enrollment # Relative import
-from sqlalchemy.event import listen
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy import create_engine
+
+# FIX: DIRECTLY IMPORT ALL MODELS. The application factory pattern handles the timing.
+from .models import db, User, Role, Course, Enrollment 
 
 # --- Admin Authentication Setup ---
 
@@ -48,7 +47,6 @@ class CustomUserView(CustomModelView):
     }
     column_exclude_list = ('password_hash', 'email', 'enrollments', 'teaching_courses') 
     
-    # 1. Hashing the password when creating a new user
     def on_model_change(self, form, model, is_created):
         if 'password' in form and form.password.data:
             model.set_password(form.password.data)
@@ -57,7 +55,6 @@ class CustomUserView(CustomModelView):
 
 # Management > Classes & Teachers View
 class CourseView(CustomModelView):
-    # FIX: Use column_formatters to display the teacher's username directly
     column_list = ('id', 'name', 'capacity', 'teacher')
     column_searchable_list = ['name']
     column_filters = ['teacher.username']
@@ -65,13 +62,13 @@ class CourseView(CustomModelView):
         'teacher': lambda v, c, m, p: m.teacher.username if m.teacher else 'N/A'
     }
     
-    # FIX: Restrict the 'teacher' dropdown to only users with the Teacher role (role_id 2)
+    # FIX 1: Restrict the 'teacher' dropdown AND set the label to 'username'
     form_args = {
         'teacher': {
-            'query_factory': lambda: User.query.filter(User.role_id == 2)
+            'query_factory': lambda: User.query.filter(User.role_id == 2),
+            'get_label': lambda u: u.username # <-- ADDED: Displays only the username
         }
     }
-    # Hide the 'enrollments' field from the form
     form_excluded_columns = ('enrollments',)
     
 
@@ -82,20 +79,19 @@ class EnrollmentView(CustomModelView):
     column_searchable_list = ['student.username', 'course.name']
     column_filters = ['course.name', 'student.username']
 
-    # FIX: Use column_formatters to display names without the <>
     column_formatters = {
         'student': lambda v, c, m, p: m.student.username,
         'course': lambda v, c, m, p: m.course.name
     }
 
-    # FIX: Restrict 'student' dropdown to only users with the Student role (role_id 1)
-    # FIX: Ensure 'course' dropdown uses the course name for display
+    # FIX 2: Restrict 'student' dropdown AND set the label to 'username'
     form_args = {
         'student': {
-            'query_factory': lambda: User.query.filter(User.role_id == 1)
+            'query_factory': lambda: User.query.filter(User.role_id == 1),
+            'get_label': lambda u: u.username # <-- ADDED: Displays only the username
         },
         'course': {
-            'get_label': lambda c: c.name # Use the course name for display
+            'get_label': lambda c: c.name # This already uses the course name
         }
     }
     
