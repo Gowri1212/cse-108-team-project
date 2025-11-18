@@ -85,12 +85,6 @@ def login():
             <button type="submit" style="width: 100%; padding: 10px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer;">Sign In</button>
         </form>
         <hr style="border-top: 1px solid #e0e0e0; margin: 20px 0;">
-        <p style="font-size: 0.9em;"><strong>Test Credentials:</strong></p>
-        <ul style="list-style-type: none; padding: 0; font-size: 0.8em;">
-            <li>Admin: <code>admin</code> / <code>adminpass</code></li>
-            <li>Teacher: <code>teacher</code> / <code>teacherpass</code></li>
-            <li>Student: <code>student</code> / <code>studentpass</code></li>
-        </ul>
         <p><a href="/" style="color: #3b82f6; text-decoration: none;">Go Home</a></p>
     </div>
     """)
