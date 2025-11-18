@@ -2,7 +2,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 
-# Global SQLAlchemy instance (will be initialized in __init__.py)
+# Global SQLAlchemy instance
 db = SQLAlchemy()
 
 # Define the three distinct roles
@@ -14,7 +14,7 @@ class Role(db.Model):
     def __repr__(self):
         return f'<Role {self.name}>'
     
-    # FIX: Flask-Admin uses __str__ for form field displays
+    # Display role name
     def __str__(self):
         return self.name
 
@@ -22,8 +22,6 @@ class Role(db.Model):
 class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(64), index=True, unique=True, nullable=False)
-    # UPDATED: Email is now optional since it's removed from the Admin form
-    email = db.Column(db.String(120), index=True, unique=False, nullable=True)
     password_hash = db.Column(db.String(128))
     # 1: Student, 2: Teacher, 3: Admin
     role_id = db.Column(db.Integer, db.ForeignKey('role.id'), default=1) 
@@ -39,7 +37,7 @@ class User(db.Model, UserMixin):
     def __repr__(self):
         return f'<User {self.username} ({self.role.name})>'
 
-# Course Model (taught by a Teacher)
+# Course Model (for Teacher)
 class Course(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
@@ -55,12 +53,12 @@ class Course(db.Model):
     def enrolled_students(self):
         return self.enrollments.count()
 
-# Enrollment Model (many-to-many relationship)
+# Enrollment Model (Students enrolling in Courses)
 class Enrollment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     course_id = db.Column(db.Integer, db.ForeignKey('course.id'))
-    grade = db.Column(db.Float, nullable=True) # Teacher function (Page 6)
+    grade = db.Column(db.Float, nullable=True) 
 
     __table_args__ = (db.UniqueConstraint('user_id', 'course_id', name='unique_enrollment'),)
 
