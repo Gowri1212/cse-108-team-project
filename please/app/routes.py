@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, redirect, url_for, request, flash
 from flask_login import current_user, login_user, logout_user, login_required
 from sqlalchemy import func
-from .models import db, User, Course, Enrollment # Relative import
+from .models import db, User, Course, Enrollment 
 
 # Create a Blueprint named 'routes'
 bp = Blueprint('routes', __name__)
@@ -9,7 +9,7 @@ bp = Blueprint('routes', __name__)
 @bp.route('/')
 def index():
     if current_user.is_authenticated:
-        # Redirect authenticated users to their specific dashboard
+        # Redirect users to their respective dashboard
         if current_user.role_id == 1: # Student
             return redirect(url_for('routes.student_dashboard'))
         elif current_user.role_id == 2: # Teacher
@@ -17,7 +17,7 @@ def index():
         elif current_user.role_id == 3: # Admin
             return redirect(url_for('admin.index'))
         else:
-            # Fallback for unexpected role IDs: log them out and redirect to the index
+            # Unknown Users: log them out and redirect to the index
             logout_user()
             flash("Session error: Unknown user role detected. Please log in again.")
             return redirect(url_for('routes.index'))
@@ -45,6 +45,8 @@ def index():
     </div>
     """)
 
+
+# USER LOGIN
 @bp.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
@@ -64,7 +66,7 @@ def login():
             flash("Invalid username or password.")
             return redirect(url_for('routes.login'))
 
-    # Simple HTML form for login
+    # HTML form for login
     return render_template_string("""
     <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ccc; border-radius: 8px; max-width: 400px; margin: 50px auto;">
         <h1 style="color: #1e40af;">Sign In</h1>
@@ -95,6 +97,7 @@ def login():
     </div>
     """)
 
+# USER LOGOUT
 @bp.route('/logout')
 @login_required
 def logout():
@@ -102,8 +105,7 @@ def logout():
     flash("You have been logged out.")
     return redirect(url_for('routes.index'))
 
-# --- STUDENT DASHBOARD AND ENROLLMENT ---
-
+# STUDENT DASHBOARD AND ENROLLMENT
 @bp.route('/student')
 @login_required
 def student_dashboard():
@@ -120,6 +122,7 @@ def student_dashboard():
     # Query for all courses not in the student's enrollments
     classes_offered = Course.query.filter(Course.id.notin_(enrolled_course_ids)).all()
     
+    # Merge and display all data from above on webpage
     return render_template_string(STUDENT_DASHBOARD_HTML, 
                                   current_user=current_user,
                                   my_enrollments=my_enrollments, 
@@ -127,29 +130,31 @@ def student_dashboard():
                                   url_for=url_for,
                                   get_flashed_messages=lambda: flash(request.args.get('flash_message')) if request.args.get('flash_message') else get_flashed_messages())
 
+# Student Enrollment Action
 @bp.route('/enroll/<int:course_id>', methods=['POST'])
 @login_required
+# Make sure role is student
 def enroll_course(course_id):
     if current_user.role_id != 1:
         flash("Access denied.")
         return redirect(url_for('routes.index'))
-
+    # Get the course
     course = db.session.get(Course, course_id)
     if not course:
         flash("Error: Course not found.")
         return redirect(url_for('routes.student_dashboard'))
 
-    # Check 1: Already registered? 
+    # Check if already registered
     if Enrollment.query.filter_by(user_id=current_user.id, course_id=course_id).first():
         flash(f"You are already registered for {course.name}.")
         return redirect(url_for('routes.student_dashboard'))
     
-    # Check 2: Capacity check
+    # Check if course capacity is reached
     if course.enrolled_students >= course.capacity:
         flash(f"Enrollment failed: {course.name} is full (Capacity {course.capacity}).")
         return redirect(url_for('routes.student_dashboard'))
 
-    # Success: Create new enrollment record
+    # If yes, create new enrollment record
     new_enrollment = Enrollment(user_id=current_user.id, course_id=course_id)
     db.session.add(new_enrollment)
     db.session.commit()
@@ -157,10 +162,11 @@ def enroll_course(course_id):
     return redirect(url_for('routes.student_dashboard'))
 
 
-# --- TEACHER DASHBOARD AND GRADE MANAGEMENT ---
+# TEACHER DASHBOARD AND GRADE MANAGEMENT
 
 @bp.route('/teacher')
 @login_required
+# Make sure role is teacher
 def teacher_dashboard():
     if current_user.role_id != 2:
         flash("Access denied: You must be a Teacher.")
@@ -169,6 +175,7 @@ def teacher_dashboard():
     # Courses taught by the current teacher
     my_courses = current_user.teaching_courses.all()
     
+    # Merge and display all data from above on webpage
     return render_template_string(TEACHER_DASHBOARD_HTML, 
                                   current_user=current_user,
                                   my_courses=my_courses,
@@ -177,14 +184,16 @@ def teacher_dashboard():
 
 @bp.route('/teacher/course/<int:course_id>')
 @login_required
+# View class roster and grades
 def view_class_roster(course_id):
+    # Make sure role is teacher
     if current_user.role_id != 2:
         flash("Access denied.")
         return redirect(url_for('routes.index'))
-
+    # Get the course
     course = db.session.get(Course, course_id)
     
-    # Security check: Ensure the teacher actually teaches this course
+    # Make sure the teacher actually teaches this course
     if not course or course.teacher_id != current_user.id:
         flash("Course not found or you are not the assigned teacher.")
         return redirect(url_for('routes.teacher_dashboard'))
@@ -192,6 +201,7 @@ def view_class_roster(course_id):
     # Get all enrollments (students and their grades) for this course
     enrollments = Enrollment.query.filter_by(course_id=course_id).join(User).all()
     
+    # Show the roster view of enrollment data
     return render_template_string(ROSTER_VIEW_HTML, 
                                   course=course,
                                   enrollments=enrollments,
@@ -200,19 +210,23 @@ def view_class_roster(course_id):
 
 @bp.route('/teacher/update_grade/<int:enrollment_id>', methods=['POST'])
 @login_required
+# Update a student's grade
 def update_grade(enrollment_id):
+    # Make sure role is teacher
     if current_user.role_id != 2:
         flash("Access denied.")
         return redirect(url_for('routes.index'))
     
+    # Get the enrollment record, get grade from form
     enrollment = db.session.get(Enrollment, enrollment_id)
     new_grade = request.form.get('grade', type=float)
     
-    # Security check: Ensure the teacher teaches this course
+    # Make sure the teacher teaches this course
     if not enrollment or enrollment.course.teacher_id != current_user.id:
         flash("Enrollment record not found or you are not the course teacher.")
         return redirect(url_for('routes.teacher_dashboard'))
 
+    # Update the grade
     try:
         if new_grade is not None and 0 <= new_grade <= 100:
             enrollment.grade = new_grade
@@ -224,12 +238,12 @@ def update_grade(enrollment_id):
         db.session.rollback()
         flash(f"An error occurred while updating the grade: {e}")
 
-    # Redirect back to the class roster
+    # Go back to class roster
     return redirect(url_for('routes.view_class_roster', course_id=enrollment.course_id))
 
-# --- HTML Templates (Rendered using render_template_string for single file structure) ---
+# HTML Templates
 
-# Helper function to mimic Flask's render_template behavior without requiring template files
+# Function to mimic Flask's render_template behavior without requiring separate template files
 from flask import render_template_string, get_flashed_messages
 
 STUDENT_DASHBOARD_HTML = """
