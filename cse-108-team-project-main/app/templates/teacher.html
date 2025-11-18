@@ -1,0 +1,58 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Teacher Dashboard</title>
+  </head>
+  <body>
+    <h1>Welcome Teacher: {{ user.username }}!</h1>
+    <p><a href="/logout">Sign out</a></p>
+
+    {%- with messages = get_flashed_messages() %}
+      {%- if messages %}
+        <ul>
+        {%- for m in messages %}
+          <li>{{ m }}</li>
+        {%- endfor %}
+        </ul>
+      {%- endif %}
+    {%- endwith %}
+
+    <h2>Your Classes</h2>
+    {% if classes %}
+      {% for c in classes %}
+        <section style="margin-bottom:24px; padding:8px; border:1px solid #ccc;">
+          <h3>{{ c.name }} (Capacity: {{ c.capacity }})</h3>
+          <p>Students enrolled: {{ c.enrollments|length }}</p>
+
+          {% if c.enrollments %}
+            <table border="1" cellpadding="6">
+              <tr><th>Student</th><th>Current Grade</th><th>Action</th></tr>
+              {% for e in c.enrollments %}
+                <tr>
+                  <td>{{ e.student.username }}</td>
+                  <td>{% if e.grade is not none %}{{ '%.2f' % e.grade }}{% else %}-{% endif %}</td>
+                  <td>
+                    <form method="post" action="{{ url_for('teacher.edit_grade') }}">
+                      <input type="hidden" name="student_id" value="{{ e.student.id }}">
+                      <input type="hidden" name="class_id" value="{{ c.id }}">
+                      <input type="text" name="grade" placeholder="Enter grade" value="{% if e.grade is not none %}{{ e.grade }}{% endif %}" size="6">
+                      <button type="submit">Save</button>
+                    </form>
+                  </td>
+                </tr>
+              {% endfor %}
+            </table>
+          {% else %}
+            <p>No students enrolled yet.</p>
+          {% endif %}
+        </section>
+      {% endfor %}
+    {% else %}
+      <p>You are not teaching any classes.</p>
+    {% endif %}
+
+  </body>
+</html>
+<h1>Welcome Teacher: {{ user.username }}!</h1>
+<a href="/logout">Sign out</a>

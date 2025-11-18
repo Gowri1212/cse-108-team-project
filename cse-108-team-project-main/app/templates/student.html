@@ -1,0 +1,74 @@
+<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title>Student Dashboard</title>
+	</head>
+	<body>
+		<h1>Welcome Student: {{ user.username }}!</h1>
+		<p><a href="/logout">Sign out</a></p>
+
+		{%- with messages = get_flashed_messages() %}
+			{%- if messages %}
+				<ul>
+				{%- for m in messages %}
+					<li>{{ m }}</li>
+				{%- endfor %}
+				</ul>
+			{%- endif %}
+		{%- endwith %}
+
+		<h2>My Classes</h2>
+		{% if enrolled %}
+			<table border="1" cellpadding="6">
+				<tr><th>Class</th><th>Teacher</th><th>Your Grade</th><th>Students Enrolled</th></tr>
+				{% for e in enrolled %}
+					<tr>
+						<td>{{ e.class_.name }}</td>
+						<td>{% if e.class_.teacher %}{{ e.class_.teacher.username }}{% else %}-{% endif %}</td>
+						<td>{% if e.grade is not none %}{{ '%.2f' % e.grade }}{% else %}-{% endif %}</td>
+						<td>{{ e.class_.enrollments|length }}</td>
+					</tr>
+				{% endfor %}
+			</table>
+		{% else %}
+			<p>You are not enrolled in any classes.</p>
+		{% endif %}
+
+		<h2>All Offered Classes</h2>
+		{% if offered %}
+			<table border="1" cellpadding="6">
+				<tr><th>Class</th><th>Teacher</th><th>Capacity</th><th>Seats Left</th><th>Enrolled</th><th>Action</th></tr>
+				{% for c in offered %}
+					<tr>
+						<td>{{ c.name }}</td>
+						<td>{% if c.teacher %}{{ c.teacher.username }}{% else %}-{% endif %}</td>
+						<td>{{ c.capacity }}</td>
+						<td>{{ c.seats_left() }}</td>
+						<td>{{ c.enrollments|length }}</td>
+						<td>
+							{% set already = false %}
+							{% for e in enrolled %}
+								{% if e.class_.id == c.id %}
+									{% set already = true %}
+								{% endif %}
+							{% endfor %}
+							{% if already %}
+								Enrolled
+							{% elif c.seats_left() <= 0 %}
+								Full
+							{% else %}
+								<form method="post" action="{{ url_for('student.enroll', class_id=c.id) }}">
+									<button type="submit">Enroll</button>
+								</form>
+							{% endif %}
+						</td>
+					</tr>
+				{% endfor %}
+			</table>
+		{% else %}
+			<p>No classes offered at the moment.</p>
+		{% endif %}
+
+	</body>
+</html>
